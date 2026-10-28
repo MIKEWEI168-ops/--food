@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ea580c">
+<title>食帳 · 每日熱量與醣類</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<style>
+:root{--org:#ea580c;--org-d:#c2410c;--bg:#fff7ed;--card:#fff;--text:#1c1917;--muted:#78716c;--border:#fed7aa;--danger:#dc2626;--ok:#16a34a;}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;padding-bottom:90px}
+header.top{position:sticky;top:0;z-index:500;background:var(--org);color:#fff;padding:13px 16px;font-size:17px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+header.top .sub{font-size:12px;font-weight:400;opacity:.9}
+main{max-width:560px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.row{display:flex;gap:8px;align-items:center}
+.lbl{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.lbl:first-child{margin-top:0}
+input,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:15px;font-family:inherit;background:#fff;color:var(--text)}
+.btn{display:inline-block;border:1px solid var(--border);background:#fff;color:var(--text);border-radius:10px;padding:10px 14px;font-size:14.5px;cursor:pointer;text-align:center}
+.btn-primary{background:var(--org);border-color:var(--org);color:#fff;font-weight:700}
+.btn-danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn-ghost{border:0;background:none;color:var(--org);font-size:15px;padding:6px 0;cursor:pointer}
+.bar{height:10px;background:#ffedd5;border-radius:99px;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:var(--org);border-radius:99px}
+.bar.over>i{background:var(--danger)}
+.meal-h{font-weight:700;margin:14px 0 4px}
+.meal-h:first-child{margin-top:0}
+.item{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #fef3c7;cursor:pointer}
+.item:last-child{border-bottom:0}
+.item .nm{flex:1;min-width:0}
+.item .num{white-space:nowrap;text-align:right;font-size:13px}
+.item .del{color:var(--danger);font-size:18px;padding:0 4px;cursor:pointer}
+.day-row{display:flex;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid #fef3c7;cursor:pointer}
+.day-row:last-child{border-bottom:0}
+.day-row .d{font-weight:700;min-width:74px}
+.day-row .t{margin-left:auto;text-align:right;font-size:13px;white-space:nowrap}
+.lib-row{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #fef3c7;cursor:pointer}
+.lib-row:last-child{border-bottom:0}
+.lib-row .nm{flex:1;min-width:0}
+.lib-row .num{white-space:nowrap;text-align:right;font-size:13px;color:var(--muted)}
+nav.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:560px;display:flex;background:#fff;border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);z-index:600}
+nav.tabs button{flex:1;border:0;background:none;padding:8px 0 7px;font-size:12px;color:var(--muted);cursor:pointer;font-family:inherit}
+nav.tabs button.active{color:var(--org);font-weight:700}
+nav.tabs .ic{font-size:22px;display:block;line-height:1.2}
+.view{display:none}.view.active{display:block}
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#292524;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;z-index:900;display:none}
+</style>
+</head>
+<body>
+<header class="top"><span>食帳</span><span class="sub">每日熱量與醣類</span></header>
+<main>
+<!-- 今日 -->
+<section class="view active" id="view-today">
+  <div class="card">
+    <div class="row">
+      <button class="btn" id="d-prev">‹</button>
+      <div style="flex:1;text-align:center"><b id="d-label"></b><div class="muted small" id="d-sub"></div></div>
+      <button class="btn" id="d-next">›</button>
+      <button class="btn-ghost" id="d-today" style="display:none">回今天</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:1"><div class="muted small">熱量</div><b><span id="t-kcal">0</span> / <span id="t-kcal-goal"></span> kcal</b><div class="bar" id="bar-kcal"><i></i></div><div class="muted small" id="r-kcal"></div></div>
+      <div style="flex:1"><div class="muted small">醣類</div><b><span id="t-carb">0</span> / <span id="t-carb-goal"></span> g</b><div class="bar" id="bar-carb"><i></i></div><div class="muted small" id="r-carb"></div></div>
+    </div>
+    <div class="muted small" style="margin-top:8px">🔥 連續記錄 <b id="streak">0</b> 天 · 今日 <span id="t-count">0</span> 項</div>
+  </div>
+  <div class="card">
+    <h3 style="margin:0 0 4px" id="form-title">＋ 記一筆</h3>
+    <label class="lbl">餐次</label>
+    <select id="f-meal"><option>早餐</option><option>午餐</option><option>晚餐</option><option>點心</option><option>宵夜</option></select>
+    <label class="lbl">食物名稱</label>
+    <input id="f-name" placeholder="例如：滷肉飯" list="food-list" autocomplete="off">
+    <datalist id="food-list"></datalist>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:1"><label class="lbl">重量（g）</label><input id="f-g" type="number" inputmode="decimal" placeholder="例如：300"></div>
+      <div style="flex:1"><label class="lbl">熱量（kcal）</label><input id="f-kcal" type="number" inputmode="decimal" placeholder="例如：540"></div>
+      <div style="flex:1"><label class="lbl">醣類（g）</label><input id="f-carb" type="number" inputmode="decimal" placeholder="例如：84"></div>
+    </div>
+    <div class="muted small" id="f-hint" style="margin-top:6px">從食物庫選到品項會自動帶入份量與營養，改重量會按比例重算；直接改熱量或醣類就以你填的為準。</div>
+    <div class="row" style="margin-top:12px"><button class="btn btn-primary" id="f-save" style="flex:1">儲存</button><button class="btn" id="f-cancel" style="display:none">取消編輯</button></div>
+  </div>
+  <div class="card"><h3 style="margin:0 0 4px">本日明細</h3><div id="day-items"><span class="muted small">還沒有記錄</span></div></div>
+</section>
+<!-- 歷史 -->
+<section class="view" id="view-hist">
+  <div class="card"><h3 style="margin-top:0">過去 14 天</h3><div id="hist-list"></div><div class="muted small" style="margin-top:8px">點一天可以回到那天查看或修改。</div></div>
+</section>
+<!-- 食物庫 -->
+<section class="view" id="view-lib">
+  <div class="card">
+    <input id="lib-q" placeholder="搜尋食物，例如：蛋餅、豆漿">
+    <div id="lib-list" style="margin-top:6px"></div>
+    <div class="muted small" style="margin-top:8px">點品項可以直接帶入今日記錄。數值為每 100g 估算，僅供參考。</div>
+  </div>
+  <div class="card">
+    <h3 style="margin:0 0 4px">＋ 新增自訂食物</h3>
+    <label class="lbl">名稱</label><input id="c-name" placeholder="例如：阿嬤的肉羹">
+    <div class="row" style="margin-top:10px">
+      <div style="flex:1"><label class="lbl">熱量 / 100g</label><input id="c-kcal" type="number" inputmode="decimal"></div>
+      <div style="flex:1"><label class="lbl">醣類 / 100g</label><input id="c-carb" type="number" inputmode="decimal"></div>
+      <div style="flex:1"><label class="lbl">預設份量 g</label><input id="c-g" type="number" inputmode="decimal" placeholder="100"></div>
+    </div>
+    <button class="btn btn-primary" id="c-save" style="width:100%;margin-top:12px">加入食物庫</button>
+  </div>
+</section>
+<!-- 設定 -->
+<section class="view" id="view-set">
+  <div class="card">
+    <h3 style="margin-top:0">每日目標</h3>
+    <label class="lbl">熱量目標（kcal）</label><input id="s-kcal" type="number" inputmode="numeric">
+    <label class="lbl">醣類目標（g）</label><input id="s-carb" type="number" inputmode="numeric">
+    <button class="btn btn-primary" id="s-save" style="width:100%;margin-top:12px">儲存目標</button>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">備份</h3>
+    <button class="btn" id="s-export" style="width:100%">⬇ 匯出備份（JSON）</button>
+    <input type="file" id="s-import-file" accept=".json,application/json" style="display:none">
+    <button class="btn" id="s-import" style="width:100%;margin-top:8px">⬆ 匯入備份（會覆蓋目前全部資料）</button>
+    <input type="file" id="m-import-file" accept=".json,application/json" style="display:none">
+    <button class="btn" id="m-import" style="width:100%;margin-top:8px">⬆ 匯入餐點（合併，不覆蓋）</button>
+    <div class="muted small" style="margin-top:8px">傳餐點照片給 Ziggy 估算後，會給你一個餐點匯入檔，用這裡匯入；只會新增，不會蓋掉原來的記錄。</div>
+    <div class="muted small" style="margin-top:8px">所有記錄只存在這支手機本機，不會上傳。換手機前先匯出備份。</div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">關於</h3>
+    <div class="muted small">食帳 v2：每日熱量與醣類估算。食物庫數值為一般營養資料估算值，實際熱量與醣類會因店家、做法而不同，僅供日常掌握參考，不做醫療用途。</div>
+  </div>
+</section>
+</main>
+<nav class="tabs">
+  <button data-tab="today" class="active"><span class="ic">🍽️</span>今日</button>
+  <button data-tab="hist"><span class="ic">📅</span>歷史</button>
+  <button data-tab="lib"><span class="ic">🔍</span>食物庫</button>
+  <button data-tab="set"><span class="ic">⚙️</span>設定</button>
+</nav>
+<div class="toast" id="toast"></div>
+<script>
+/* 食物庫：[名稱, 熱量/100g, 醣類/100g, 預設份量g]（估算值） */
+const FOOD=[
+["白飯",130,28,200],["糙米飯",112,23,200],["白吐司",265,49,60],["全麥吐司",247,41,60],
+["饅頭",236,47,100],["麵條",140,27,250],["米粉",140,28,250],["冬粉",80,16,200],
+["泡麵",450,60,85],["粽子",250,35,200],["肉包",240,38,100],["菜包",180,35,100],
+["春捲",220,30,100],["飯糰",200,38,200],["三明治",220,25,200],["漢堡",260,28,250],
+["披薩",270,30,200],["可頌",400,45,60],["蘿蔔糕",200,22,150],["蔥油餅",320,35,150],
+["蛋餅",220,18,150],["小籠包",230,28,100],["水餃",250,30,150],
+["滷肉飯",180,28,300],["雞肉飯",170,26,300],["炒飯",180,30,300],["炒麵",170,28,300],
+["乾麵",220,35,300],["陽春麵",150,25,300],["牛肉麵",150,20,500],["大腸麵線",160,22,300],
+["蚵仔煎",200,20,250],["義大利麵紅醬",170,25,250],["義大利麵白醬",200,25,250],["鐵板麵",180,30,300],
+["壽司",150,30,200],["餛飩湯",120,15,300],["味噌湯",60,6,300],["玉米濃湯",90,12,250],
+["雞胸肉",165,0,150],["雞腿",180,0,150],["豬里肌",180,0,150],["牛肉",200,0,150],
+["鮭魚",210,0,150],["鯛魚",120,0,150],["蝦",100,1,150],["花枝",90,3,150],
+["貢丸",220,3,100],["熱狗",290,2,50],["培根",540,1,50],["火腿",120,2,50],["起司",400,1,30],
+["水煮蛋",155,1,50],["茶葉蛋",150,1,50],["豆腐",80,3,150],["豆干",180,5,100],
+["炸雞排",300,15,200],["鹹酥雞",350,18,150],["滷味",150,12,200],["關東煮",100,12,250],
+["火鍋",150,10,300],["麻辣鍋",200,8,300],["臭豆腐",280,15,150],
+["燙青菜",50,6,150],["炒青菜",100,6,150],["沙拉",80,8,200],
+["香蕉",89,23,100],["蘋果",52,14,150],["芭樂",42,10,150],["葡萄",69,18,100],
+["西瓜",30,8,200],["鳳梨",50,13,150],["芒果",60,15,150],["堅果",600,15,30],
+["豆漿無糖",35,2,250],["豆漿有糖",65,9,250],["牛奶",60,5,250],["拿鐵無糖",60,6,350],
+["珍珠奶茶",70,12,500],["紅茶無糖",0,0,500],["可樂",42,11,330],["柳橙汁",45,11,250],
+["啤酒",43,4,330],["優格無糖",60,5,150],["優格有糖",90,13,150],
+["洋芋片",530,50,50],["蘇打餅乾",440,70,50],["海綿蛋糕",320,45,100],["薯條",320,38,100]
+];
+const MEALS=["早餐","午餐","晚餐","點心","宵夜"];
+const WD="日一二三四五六";
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function todayISO(){return iso(new Date());}
+function fmtMD(s){const p=s.split("-");return Number(p[1])+"/"+Number(p[2]);}
+function r0(x){return Math.round(x);}
+let S;
+try{S=JSON.parse(localStorage.getItem("food_v1"))||null;}catch(e){S=null;}
+if(!S||!S.entries)S={entries:[],customFoods:[],targets:{kcal:2000,carb:250}};
+if(!S.targets)S.targets={kcal:2000,carb:250};
+function save(){try{localStorage.setItem("food_v1",JSON.stringify(S));}catch(e){}}
+let viewDate=todayISO(),editId=null,fromLib=null,edited=false;
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2200);}
+function allFoods(){return FOOD.concat((S.customFoods||[]).map(f=>[f.n,f.k,f.c,f.g]));}
+function findFood(name){const a=allFoods();for(const f of a){if(f[0]===name)return f;}return null;}
+function dayEntries(date){return S.entries.filter(e=>e.date===date);}
+function dayTotals(date){let k=0,c=0;dayEntries(date).forEach(e=>{k+=+e.kcal||0;c+=+e.carb||0;});return{k:k,c:c};}
+function streak(){
+  let n=0;const d=new Date();
+  for(;;){const s=iso(d);if(dayEntries(s).length)n++;else break;d.setDate(d.getDate()-1);if(n>3650)break;}
+  return n;
+}
+function showTab(t){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  $("#view-"+t).classList.add("active");
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.getAttribute("data-tab")===t));
+  if(t==="hist")renderHist();
+  if(t==="lib")renderLib();
+}
+function renderToday(){
+  const isToday=viewDate===todayISO();
+  const d=new Date(viewDate+"T12:00:00");
+  $("#d-label").textContent=fmtMD(viewDate)+"（"+WD[d.getDay()]+"）"+(isToday?" · 今天":"");
+  $("#d-sub").textContent=viewDate;
+  $("#d-today").style.display=isToday?"none":"";
+  const t=dayTotals(viewDate),tg=S.targets;
+  $("#t-kcal").textContent=r0(t.k);$("#t-carb").textContent=r0(t.c);
+  $("#t-kcal-goal").textContent=tg.kcal;$("#t-carb-goal").textContent=tg.carb;
+  const bk=$("#bar-kcal"),bc=$("#bar-carb");
+  bk.querySelector("i").style.width=Math.min(100,t.k/tg.kcal*100)+"%";
+  bc.querySelector("i").style.width=Math.min(100,t.c/tg.carb*100)+"%";
+  bk.classList.toggle("over",t.k>tg.kcal);bc.classList.toggle("over",t.c>tg.carb);
+  $("#r-kcal").textContent=t.k>tg.kcal?"超過 "+r0(t.k-tg.kcal)+" kcal":"還可吃 "+r0(tg.kcal-t.k)+" kcal";
+  $("#r-carb").textContent=t.c>tg.carb?"超過 "+r0(t.c-tg.carb)+" g":"還可吃 "+r0(tg.carb-t.c)+" g";
+  $("#streak").textContent=streak();
+  const es=dayEntries(viewDate);
+  $("#t-count").textContent=es.length;
+  let h="";
+  MEALS.forEach(m=>{
+    const items=es.filter(e=>e.meal===m);
+    if(!items.length)return;
+    h+='<div class="meal-h">'+m+'</div>';
+    items.forEach(e=>{
+      h+='<div class="item" data-edit="'+e.id+'"><div class="nm"><b>'+esc(e.name)+'</b>'+(e.g?'<span class="muted small"> '+e.g+'g</span>':"")+'</div><div class="num">'+r0(e.kcal)+' kcal<br>'+r0(e.carb)+'g 醣</div><span class="del" data-del="'+e.id+'">✕</span></div>';
+    });
+  });
+  $("#day-items").innerHTML=h||'<span class="muted small">還沒有記錄</span>';
+  $("#day-items").querySelectorAll("[data-del]").forEach(x=>x.onclick=ev=>{
+    ev.stopPropagation();
+    const id=x.getAttribute("data-del");
+    if(!confirm("刪除這一筆？"))return;
+    S.entries=S.entries.filter(e=>e.id!==id);save();renderToday();
+  });
+  $("#day-items").querySelectorAll("[data-edit]").forEach(x=>x.onclick=()=>{
+    const e=S.entries.find(v=>v.id===x.getAttribute("data-edit"));if(!e)return;
+    editId=e.id;fromLib=null;edited=true;
+    $("#form-title").textContent="✏️ 編輯這一筆";
+    $("#f-meal").value=e.meal;$("#f-name").value=e.name;
+    $("#f-g").value=e.g==null?"":e.g;$("#f-kcal").value=e.kcal;$("#f-carb").value=e.carb;
+    $("#f-cancel").style.display="";
+    window.scrollTo({top:0,behavior:"smooth"});
+  });
+  const dl=$("#food-list");
+  const names=[];const seen={};
+  allFoods().forEach(f=>{if(!seen[f[0]]){seen[f[0]]=1;names.push(f[0]);}});
+  S.entries.slice().reverse().forEach(e=>{if(!seen[e.name]){seen[e.name]=1;names.push(e.name);}});
+  dl.innerHTML=names.map(n=>"<option value=\""+esc(n)+"\">").join("");
+}
+function renderHist(){
+  let h="";const d=new Date();
+  for(let i=0;i<14;i++){
+    const s=iso(d),t=dayEntries(s);
+    let k=0,c=0;t.forEach(e=>{k+=+e.kcal||0;c+=+e.carb||0;});
+    h+='<div class="day-row" data-hday="'+s+'"><span class="d">'+fmtMD(s)+"（"+WD[d.getDay()]+"）"+(s===todayISO()?" · 今天":"")+'</span><span class="day-t">'+(t.length?r0(k)+" kcal · "+r0(c)+"g 醣 · "+t.length+" 項":'<span class="muted">無記錄</span>')+'</span></div>';
+    d.setDate(d.getDate()-1);
+  }
+  $("#hist-list").innerHTML=h;
+  $("#hist-list").querySelectorAll("[data-hday]").forEach(r=>r.onclick=()=>{viewDate=r.getAttribute("data-hday");resetForm();showTab("today");renderToday();});
+}
+function renderLib(){
+  const q=($("#lib-q").value||"").trim();
+  const list=allFoods().filter(f=>!q||f[0].indexOf(q)>=0);
+  $("#lib-list").innerHTML=list.map(f=>{
+    const custom=(S.customFoods||[]).some(c=>c.n===f[0]);
+    return '<div class="lib-row" data-lib="'+esc(f[0])+'"><div class="nm"><b>'+esc(f[0])+'</b>'+(custom?' <span class="muted small">自訂</span>':"")+'</div><div class="num">'+f[1]+" kcal / "+f[2]+"g 醣（每100g）</div>"+(custom?'<span class="del" data-clib="'+esc(f[0])+'" style="color:var(--danger);font-size:18px;padding:0 4px">✕</span>':"")+'</div>';
+  }).join("")||'<span class="muted small">沒有符合的食物</span>';
+  $("#lib-list").querySelectorAll("[data-lib]").forEach(r=>r.onclick=ev=>{
+    if(ev.target.getAttribute("data-clib"))return;
+    const f=findFood(r.getAttribute("data-lib"));if(!f)return;
+    viewDate=todayISO();resetForm();showTab("today");renderToday();
+    $("#f-name").value=f[0];applyLib(f);
+    window.scrollTo({top:0,behavior:"smooth"});
+    toast("已帶入「"+f[0]+"」，改重量會重算");
+  });
+  $("#lib-list").querySelectorAll("[data-clib]").forEach(x=>x.onclick=ev=>{
+    ev.stopPropagation();
+    const n=x.getAttribute("data-clib");
+    if(!confirm("刪除自訂食物「"+n+"」？"))return;
+    S.customFoods=(S.customFoods||[]).filter(c=>c.n!==n);save();renderLib();
+  });
+}
+function applyLib(f){
+  fromLib=f;edited=false;
+  $("#f-g").value=f[3];
+  $("#f-kcal").value=r0(f[1]*f[3]/100);
+  $("#f-carb").value=r0(f[2]*f[3]/100);
+}
+function resetForm(){
+  editId=null;fromLib=null;edited=false;
+  $("#form-title").textContent="＋ 記一筆";
+  $("#f-meal").value="午餐";$("#f-name").value="";$("#f-g").value="";$("#f-kcal").value="";$("#f-carb").value="";
+  $("#f-cancel").style.display="none";
+}
+$("#f-name").addEventListener("change",()=>{
+  const f=findFood($("#f-name").value.trim());
+  if(f)applyLib(f);else{fromLib=null;}
+});
+$("#f-g").addEventListener("input",()=>{
+  if(fromLib&&!edited){
+    const g=+$("#f-g").value;
+    if(g>0){$("#f-kcal").value=r0(fromLib[1]*g/100);$("#f-carb").value=r0(fromLib[2]*g/100);}
+  }
+});
+$("#f-kcal").addEventListener("input",()=>{edited=true;});
+$("#f-carb").addEventListener("input",()=>{edited=true;});
+$("#f-save").onclick=()=>{
+  const name=$("#f-name").value.trim();
+  if(!name){toast("請輸入食物名稱");return;}
+  const g=$("#f-g").value===""?null:+$("#f-g").value;
+  const kcal=+$("#f-kcal").value||0,carb=+$("#f-carb").value||0;
+  if(editId){
+    const e=S.entries.find(v=>v.id===editId);
+    if(e){e.meal=$("#f-meal").value;e.name=name;e.g=g;e.kcal=kcal;e.carb=carb;}
+    toast("已更新");
+  }else{
+    S.entries.push({id:Date.now()+""+Math.floor(Math.random()*1000),date:viewDate,meal:$("#f-meal").value,name:name,g:g,kcal:kcal,carb:carb});
+    toast("已記錄「"+name+"」");
+  }
+  save();resetForm();renderToday();
+};
+$("#f-cancel").onclick=()=>{resetForm();};
+$("#d-prev").onclick=()=>{const d=new Date(viewDate+"T12:00:00");d.setDate(d.getDate()-1);viewDate=iso(d);resetForm();renderToday();};
+$("#d-next").onclick=()=>{const d=new Date(viewDate+"T12:00:00");d.setDate(d.getDate()+1);viewDate=iso(d);resetForm();renderToday();};
+$("#d-today").onclick=()=>{viewDate=todayISO();resetForm();renderToday();};
+$("#lib-q").addEventListener("input",renderLib);
+$("#c-save").onclick=()=>{
+  const n=$("#c-name").value.trim(),k=+$("#c-kcal").value,c=+$("#c-carb").value,g=+$("#c-g").value||100;
+  if(!n){toast("請輸入名稱");return;}
+  if(findFood(n)){toast("食物庫已有「"+n+"」");return;}
+  S.customFoods.push({n:n,k:k,c:c,g:g});save();
+  $("#c-name").value="";$("#c-kcal").value="";$("#c-carb").value="";$("#c-g").value="";
+  renderLib();toast("已加入食物庫");
+};
+$("#s-save").onclick=()=>{
+  const k=+$("#s-kcal").value||2000,c=+$("#s-carb").value||250;
+  S.targets={kcal:k,carb:c};save();renderToday();toast("目標已儲存");
+};
+$("#s-export").onclick=()=>{
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="食帳備份-"+todayISO()+".json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+};
+function mergeMeals(list){
+  if(!Array.isArray(list))return null;
+  let added=0,skipped=0;
+  const have={};S.entries.forEach(e=>{if(e.id)have[e.id]=1;});
+  list.forEach(raw=>{
+    if(!raw||typeof raw!=="object"){skipped++;return;}
+    const name=String(raw.name||"").trim();if(!name){skipped++;return;}
+    let date=String(raw.date||"");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))date=todayISO();
+    const meal=MEALS.indexOf(raw.meal)>=0?raw.meal:"午餐";
+    let id=raw.id!=null?String(raw.id):"";
+    if(id&&have[id]){skipped++;return;}
+    if(!id)id=Date.now()+""+Math.floor(Math.random()*1000);
+    if(have[id]){skipped++;return;}
+    have[id]=1;
+    S.entries.push({id:id,date:date,meal:meal,name:name,
+      g:(raw.g==null||raw.g==="")?null:+raw.g,
+      kcal:Math.max(0,+raw.kcal||0),carb:Math.max(0,+raw.carb||0)});
+    added++;
+  });
+  return {added:added,skipped:skipped};
+}
+$("#m-import").onclick=()=>$("#m-import-file").click();
+$("#m-import-file").addEventListener("change",function(){
+  const f=this.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const j=JSON.parse(r.result);
+      const list=Array.isArray(j)?j:j.entries;
+      const res=mergeMeals(list);
+      if(!res)throw new Error("格式不符");
+      save();renderToday();
+      toast("已匯入 "+res.added+" 筆"+(res.skipped?"（跳過 "+res.skipped+" 筆重複／無效）":""));
+    }catch(e){toast("匯入失敗：檔案格式不符");}
+  };
+  r.readAsText(f);this.value="";
+});
+$("#s-import").onclick=()=>$("#s-import-file").click();
+$("#s-import-file").addEventListener("change",function(){
+  const f=this.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const j=JSON.parse(r.result);
+      if(!j||!Array.isArray(j.entries))throw new Error("格式不符");
+      if(!confirm("匯入會覆蓋目前全部資料，確定嗎？"))return;
+      S=j;if(!S.targets)S.targets={kcal:2000,carb:250};if(!S.customFoods)S.customFoods=[];
+      save();viewDate=todayISO();resetForm();renderToday();toast("已匯入備份");
+    }catch(e){toast("匯入失敗：檔案格式不符");}
+  };
+  r.readAsText(f);this.value="";
+});
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.getAttribute("data-tab")));
+$("#s-kcal").value=S.targets.kcal;$("#s-carb").value=S.targets.carb;
+$("#f-meal").value=(new Date().getHours()<10?"早餐":new Date().getHours()<14?"午餐":new Date().getHours()<20?"晚餐":"點心");
+renderToday();
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
