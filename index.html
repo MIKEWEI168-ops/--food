@@ -49,6 +49,12 @@ nav.tabs button.active{color:var(--org);font-weight:700}
 nav.tabs .ic{font-size:22px;display:block;line-height:1.2}
 .view{display:none}.view.active{display:block}
 .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#292524;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;z-index:900;display:none}
+.thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0}
+.photowrap{margin-top:10px}
+.photowrap img{max-width:100%;border-radius:10px;display:none}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:950;display:none;align-items:center;justify-content:center;padding:16px}
+.modal img{max-width:100%;max-height:75vh;border-radius:10px}
+.modal .mbar{margin-top:12px;display:flex;gap:8px;justify-content:center}
 </style>
 </head>
 <body>
@@ -82,6 +88,12 @@ nav.tabs .ic{font-size:22px;display:block;line-height:1.2}
       <div style="flex:1"><label class="lbl">醣類（g）</label><input id="f-carb" type="number" inputmode="decimal" placeholder="例如：84"></div>
     </div>
     <div class="muted small" id="f-hint" style="margin-top:6px">從食物庫選到品項會自動帶入份量與營養，改重量會按比例重算；直接改熱量或醣類就以你填的為準。</div>
+    <div class="row" style="margin-top:10px">
+      <input type="file" id="f-photo" accept="image/*" capture="environment" style="display:none">
+      <button class="btn" id="f-photo-btn" style="flex:1">📷 拍照</button>
+      <button class="btn" id="f-photo-del" style="display:none">移除照片</button>
+    </div>
+    <div class="photowrap"><img id="f-photo-prev"></div>
     <div class="row" style="margin-top:12px"><button class="btn btn-primary" id="f-save" style="flex:1">儲存</button><button class="btn" id="f-cancel" style="display:none">取消編輯</button></div>
   </div>
   <div class="card"><h3 style="margin:0 0 4px">本日明細</h3><div id="day-items"><span class="muted small">還沒有記錄</span></div></div>
@@ -124,11 +136,14 @@ nav.tabs .ic{font-size:22px;display:block;line-height:1.2}
     <input type="file" id="m-import-file" accept=".json,application/json" style="display:none">
     <button class="btn" id="m-import" style="width:100%;margin-top:8px">⬆ 匯入餐點（合併，不覆蓋）</button>
     <div class="muted small" style="margin-top:8px">傳餐點照片給 Ziggy 估算後，會給你一個餐點匯入檔，用這裡匯入；只會新增，不會蓋掉原來的記錄。</div>
-    <div class="muted small" style="margin-top:8px">所有記錄只存在這支手機本機，不會上傳。換手機前先匯出備份。</div>
+    <label class="lbl">貼上餐點 JSON（合併，不覆蓋）</label>
+    <textarea id="p-paste" rows="4" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit" placeholder='貼上 Ziggy 給的餐點 JSON，例如：{"entries":[{"date":"2026-10-28","meal":"晚餐","name":"白飯","g":200,"kcal":260,"carb":56}]}'></textarea>
+    <button class="btn" id="p-import" style="width:100%;margin-top:8px">⬆ 貼上匯入（合併，不覆蓋）</button>
+    <div class="muted small" style="margin-top:8px">所有記錄只存在這支手機本機，不會上傳。換手機前先匯出備份。照片會縮到 800px 存在手機裡，刪除記錄會一併刪除照片。</div>
   </div>
   <div class="card">
     <h3 style="margin-top:0">關於</h3>
-    <div class="muted small">食帳 v2：每日熱量與醣類估算。食物庫數值為一般營養資料估算值，實際熱量與醣類會因店家、做法而不同，僅供日常掌握參考，不做醫療用途。</div>
+    <div class="muted small">食帳 v3：每日熱量與醣類估算。新增：記一筆可拍照附在記錄上、設定頁可貼上 JSON 匯入餐點。食物庫數值為一般營養資料估算值，實際熱量與醣類會因店家、做法而不同，僅供日常掌握參考，不做醫療用途。</div>
   </div>
 </section>
 </main>
@@ -138,6 +153,13 @@ nav.tabs .ic{font-size:22px;display:block;line-height:1.2}
   <button data-tab="lib"><span class="ic">🔍</span>食物庫</button>
   <button data-tab="set"><span class="ic">⚙️</span>設定</button>
 </nav>
+<div class="modal" id="photo-modal"><div style="text-align:center">
+  <img id="m-photo">
+  <div class="mbar">
+    <button class="btn btn-primary" id="m-share">分享照片</button>
+    <button class="btn" id="m-close">關閉</button>
+  </div>
+</div></div>
 <div class="toast" id="toast"></div>
 <script>
 /* 食物庫：[名稱, 熱量/100g, 醣類/100g, 預設份量g]（估算值） */
@@ -180,6 +202,7 @@ if(!S||!S.entries)S={entries:[],customFoods:[],targets:{kcal:2000,carb:250}};
 if(!S.targets)S.targets={kcal:2000,carb:250};
 function save(){try{localStorage.setItem("food_v1",JSON.stringify(S));}catch(e){}}
 let viewDate=todayISO(),editId=null,fromLib=null,edited=false;
+let pendingPhoto=null,photoShareData=null,photoShareName="餐點";
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2200);}
 function allFoods(){return FOOD.concat((S.customFoods||[]).map(f=>[f.n,f.k,f.c,f.g]));}
 function findFood(name){const a=allFoods();for(const f of a){if(f[0]===name)return f;}return null;}
@@ -221,7 +244,7 @@ function renderToday(){
     if(!items.length)return;
     h+='<div class="meal-h">'+m+'</div>';
     items.forEach(e=>{
-      h+='<div class="item" data-edit="'+e.id+'"><div class="nm"><b>'+esc(e.name)+'</b>'+(e.g?'<span class="muted small"> '+e.g+'g</span>':"")+'</div><div class="num">'+r0(e.kcal)+' kcal<br>'+r0(e.carb)+'g 醣</div><span class="del" data-del="'+e.id+'">✕</span></div>';
+      h+='<div class="item" data-edit="'+e.id+'">'+(e.photo?'<img class="thumb" src="'+e.photo+'" data-photo="'+e.id+'">':"")+'<div class="nm"><b>'+esc(e.name)+'</b>'+(e.g?'<span class="muted small"> '+e.g+'g</span>':"")+'</div><div class="num">'+r0(e.kcal)+' kcal<br>'+r0(e.carb)+'g 醣</div><span class="del" data-del="'+e.id+'">✕</span></div>';
     });
   });
   $("#day-items").innerHTML=h||'<span class="muted small">還沒有記錄</span>';
@@ -231,12 +254,21 @@ function renderToday(){
     if(!confirm("刪除這一筆？"))return;
     S.entries=S.entries.filter(e=>e.id!==id);save();renderToday();
   });
+  $("#day-items").querySelectorAll("[data-photo]").forEach(x=>x.onclick=ev=>{
+    ev.stopPropagation();
+    const e=S.entries.find(v=>v.id===x.getAttribute("data-photo"));if(!e||!e.photo)return;
+    photoShareData=e.photo;photoShareName=e.name;
+    $("#m-photo").src=e.photo;$("#photo-modal").style.display="flex";
+  });
   $("#day-items").querySelectorAll("[data-edit]").forEach(x=>x.onclick=()=>{
     const e=S.entries.find(v=>v.id===x.getAttribute("data-edit"));if(!e)return;
     editId=e.id;fromLib=null;edited=true;
     $("#form-title").textContent="✏️ 編輯這一筆";
     $("#f-meal").value=e.meal;$("#f-name").value=e.name;
     $("#f-g").value=e.g==null?"":e.g;$("#f-kcal").value=e.kcal;$("#f-carb").value=e.carb;
+    pendingPhoto=e.photo||null;
+    const pp=$("#f-photo-prev");
+    if(pendingPhoto){pp.src=pendingPhoto;pp.style.display="block";$("#f-photo-del").style.display="";}else{pp.src="";pp.style.display="none";$("#f-photo-del").style.display="none";}
     $("#f-cancel").style.display="";
     window.scrollTo({top:0,behavior:"smooth"});
   });
@@ -286,7 +318,9 @@ function applyLib(f){
   $("#f-carb").value=r0(f[2]*f[3]/100);
 }
 function resetForm(){
-  editId=null;fromLib=null;edited=false;
+  editId=null;fromLib=null;edited=false;pendingPhoto=null;
+  const pp=$("#f-photo-prev");if(pp){pp.src="";pp.style.display="none";}
+  const pd=$("#f-photo-del");if(pd)pd.style.display="none";
   $("#form-title").textContent="＋ 記一筆";
   $("#f-meal").value="午餐";$("#f-name").value="";$("#f-g").value="";$("#f-kcal").value="";$("#f-carb").value="";
   $("#f-cancel").style.display="none";
@@ -310,15 +344,57 @@ $("#f-save").onclick=()=>{
   const kcal=+$("#f-kcal").value||0,carb=+$("#f-carb").value||0;
   if(editId){
     const e=S.entries.find(v=>v.id===editId);
-    if(e){e.meal=$("#f-meal").value;e.name=name;e.g=g;e.kcal=kcal;e.carb=carb;}
+    if(e){e.meal=$("#f-meal").value;e.name=name;e.g=g;e.kcal=kcal;e.carb=carb;if(pendingPhoto)e.photo=pendingPhoto;else delete e.photo;}
     toast("已更新");
   }else{
-    S.entries.push({id:Date.now()+""+Math.floor(Math.random()*1000),date:viewDate,meal:$("#f-meal").value,name:name,g:g,kcal:kcal,carb:carb});
+    const ne={id:Date.now()+""+Math.floor(Math.random()*1000),date:viewDate,meal:$("#f-meal").value,name:name,g:g,kcal:kcal,carb:carb};
+    if(pendingPhoto)ne.photo=pendingPhoto;
+    S.entries.push(ne);
     toast("已記錄「"+name+"」");
   }
   save();resetForm();renderToday();
 };
 $("#f-cancel").onclick=()=>{resetForm();};
+$("#f-photo-btn").onclick=()=>$("#f-photo").click();
+$("#f-photo").addEventListener("change",function(){
+  const f=this.files[0];this.value="";if(!f)return;
+  const img=new Image();
+  img.onload=()=>{
+    const max=800,scale=Math.min(1,max/Math.max(img.width,img.height));
+    const c=document.createElement("canvas");
+    c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    pendingPhoto=c.toDataURL("image/jpeg",0.7);
+    const p=$("#f-photo-prev");p.src=pendingPhoto;p.style.display="block";
+    $("#f-photo-del").style.display="";
+  };
+  img.onerror=()=>toast("讀取照片失敗");
+  const rd=new FileReader();
+  rd.onload=()=>{img.src=rd.result;};
+  rd.readAsDataURL(f);
+});
+$("#f-photo-del").onclick=()=>{
+  pendingPhoto=null;
+  const p=$("#f-photo-prev");p.src="";p.style.display="none";
+  $("#f-photo-del").style.display="none";
+};
+async function sharePhoto(){
+  if(!photoShareData)return;
+  try{
+    const res=await fetch(photoShareData);
+    const blob=await res.blob();
+    const file=new File([blob],"meal-photo.jpg",{type:"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file]});
+    }else{
+      const a=document.createElement("a");a.href=photoShareData;a.download="meal-photo.jpg";a.click();
+      toast("已下載照片，可再傳給 Ziggy");
+    }
+  }catch(err){toast("分享失敗，請改用下載");}
+}
+$("#m-share").onclick=sharePhoto;
+$("#m-close").onclick=()=>{$("#photo-modal").style.display="none";};
+$("#photo-modal").onclick=ev=>{if(ev.target.id==="photo-modal")ev.target.style.display="none";};
 $("#d-prev").onclick=()=>{const d=new Date(viewDate+"T12:00:00");d.setDate(d.getDate()-1);viewDate=iso(d);resetForm();renderToday();};
 $("#d-next").onclick=()=>{const d=new Date(viewDate+"T12:00:00");d.setDate(d.getDate()+1);viewDate=iso(d);resetForm();renderToday();};
 $("#d-today").onclick=()=>{viewDate=todayISO();resetForm();renderToday();};
@@ -379,6 +455,19 @@ $("#m-import-file").addEventListener("change",function(){
   };
   r.readAsText(f);this.value="";
 });
+$("#p-import").onclick=()=>{
+  const t=($("#p-paste").value||"").trim();
+  if(!t){toast("請先貼上餐點 JSON");return;}
+  try{
+    const j=JSON.parse(t);
+    const list=Array.isArray(j)?j:j.entries;
+    const res=mergeMeals(list);
+    if(!res)throw new Error("格式不符");
+    save();renderToday();
+    $("#p-paste").value="";
+    toast("已匯入 "+res.added+" 筆"+(res.skipped?"（跳過 "+res.skipped+" 筆重複／無效）":""));
+  }catch(e){toast("匯入失敗：內容不是正確的餐點 JSON");}
+};
 $("#s-import").onclick=()=>$("#s-import-file").click();
 $("#s-import-file").addEventListener("change",function(){
   const f=this.files[0];if(!f)return;

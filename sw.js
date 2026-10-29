@@ -1,5 +1,5 @@
 /* 食帳 service worker — 快取 App 本體，離線也能開 */
-const CACHE = 'food-v2';
+const CACHE = 'food-v3';
 const ASSETS = [
   './',
   './index.html',
